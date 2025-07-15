@@ -1,7 +1,7 @@
 pipeline{
     agent any
 
-    eviroment{
+    environment{
         IMAGE_NAME = "dilipkamti/product_service"
         IMAGE_TAG = "latest"
     }
