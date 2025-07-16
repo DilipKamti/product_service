@@ -1,8 +1,6 @@
 package com.microservice.product.service.model;
 
 import java.math.BigDecimal;
-
-import jakarta.annotation.Nonnull;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
