@@ -18,25 +18,40 @@ pipeline {
             }
         }
 
+        stage('Determine Docker Image Version') {
+            steps {
+                script {
+                    def versionFile = '.docker-version'
+                    def currentVersion = '0.0'
+                    if (fileExists(versionFile)) {
+                        currentVersion = readFile(versionFile).trim()
+                    }
+                    def (major, minor) = currentVersion.tokenize('.').collect { it.toInteger() }
+                    def newVersion = "${major}.${minor + 1}"
+                    def versionTag = "${DOCKER_TAG_PREFIX}${newVersion}"
+                    env.DOCKER_VERSION = versionTag
+                    writeFile file: versionFile, text: newVersion
+                }
+            }
+        }
+
         stage('Clean Old Docker Resources') {
             when {
                 expression { params.DELETE_OLD_BUILDS }
             }
             steps {
                 script {
-                    def stopAndRemoveCmd = '''
-                        docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}" | xargs -r docker stop || true
-                        docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}" | xargs -r docker rm || true
-                        docker images dilipkamti/product_service --format "{{.Repository}}:{{.Tag}}" | grep -v ${DOCKER_VERSION} | xargs -r docker rmi -f || true
-                    '''
-
                     if (isUnix()) {
-                        sh stopAndRemoveCmd
+                        sh '''
+                            docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}" | xargs -r docker stop || true
+                            docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}" | xargs -r docker rm || true
+                            docker images dilipkamti/product_service --format "{{.Repository}}:{{.Tag}}" | grep -v ${DOCKER_VERSION} | xargs -r docker rmi -f || true
+                        '''
                     } else {
-                        bat '''
+                        bat """
                         FOR /F "tokens=*" %%i IN ('docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}"') DO docker stop %%i & docker rm %%i
                         FOR /F "tokens=*" %%i IN ('docker images dilipkamti/product_service --format "{{.Repository}}:{{.Tag}}" ^| findstr /V %DOCKER_VERSION%') DO docker rmi -f %%i
-                        '''
+                        """
                     }
                 }
             }
@@ -51,23 +66,6 @@ pipeline {
                     } else {
                         bat mvnCmd
                     }
-                }
-            }
-        }
-
-        stage('Determine Docker Image Version') {
-            steps {
-                script {
-                    def versionFile = '.docker-version'
-                    def currentVersion = '0.0'
-                    if (fileExists(versionFile)) {
-                        currentVersion = readFile(versionFile).trim()
-                    }
-                    def (major, minor) = currentVersion.tokenize('.').collect { it.toInteger() }
-                    def newVersion = "${major}.${minor + 1}"
-                    def versionTag = "${DOCKER_TAG_PREFIX}${newVersion}"
-                    env.DOCKER_VERSION = versionTag
-                    writeFile file: versionFile, text: newVersion
                 }
             }
         }
@@ -94,9 +92,8 @@ pipeline {
                     passwordVariable: 'DOCKER_PASSWORD'
                 )]) {
                     script {
-                        def loginCmd = "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
                         if (isUnix()) {
-                            sh loginCmd
+                            sh "echo $DOCKER_PASSWORD | docker login -u $DOCKER_USERNAME --password-stdin"
                         } else {
                             bat """echo %DOCKER_PASSWORD% | docker login -u %DOCKER_USERNAME% --password-stdin"""
                         }
@@ -109,11 +106,10 @@ pipeline {
             steps {
                 script {
                     def versionTag = "${IMAGE_NAME}:${DOCKER_VERSION}"
-                    def pushCmd = "docker push ${versionTag}"
                     if (isUnix()) {
-                        sh pushCmd
+                        sh "docker push ${versionTag}"
                     } else {
-                        bat pushCmd
+                        bat "docker push ${versionTag}"
                     }
                 }
             }
