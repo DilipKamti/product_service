@@ -8,12 +8,30 @@ pipeline {
 
     parameters {
         choice(name: 'PROFILE', choices: ['dev', 'prod'], description: 'Choose Spring Boot profile')
+
+        booleanParam(name: 'DELETE_OLD_BUILDS', defaultValue: false, description: 'Delete old Docker images before building?')
     }
 
     stages {
         stage('Checkout') {
             steps {
                 git 'https://github.com/DilipKamti/product_service.git'
+            }
+        }
+
+        stage('Clean Old Docker Images') {
+            when {
+                expression { params.DELETE_OLD_BUILDS }
+            }
+            steps {
+                script {
+                    def oldImagesCmd = "docker images ${IMAGE_NAME} --format \"{{.Repository}}:{{.Tag}}\" | grep -v ${params.PROFILE}-${BUILD_NUMBER} | xargs -r docker rmi -f"
+                    if (isUnix()) {
+                        sh oldImagesCmd
+                    } else {
+                        bat "FOR /F \"tokens=*\" %%i IN ('docker images ${IMAGE_NAME} --format \"{{.Repository}}:{{.Tag}}\" ^| findstr /V ${params.PROFILE}-${BUILD_NUMBER}') DO docker rmi -f %%i"
+                    }
+                }
             }
         }
 
@@ -87,8 +105,20 @@ pipeline {
             }
             steps {
                 echo 'Deploying product_service in production mode...'
-                // You can add docker-compose or remote SSH steps here
+                // Add docker-compose or SSH deploy commands here
             }
+        }
+    }
+// Post actions to clean up workspace
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Build and deployment successful!'
+        }
+        failure {
+            echo 'Build or deployment failed!'
         }
     }
 }
