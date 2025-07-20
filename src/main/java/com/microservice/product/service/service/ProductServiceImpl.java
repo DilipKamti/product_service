@@ -29,7 +29,6 @@ public class ProductServiceImpl implements ProductService {
                                 .productId(generateUniqueProductId())
                                 .description(request.description())
                                 .price(request.price())
-                                .quantity(request.quantity())
                                 .build();
 
                 Product savedProduct = productRepository.save(product);
@@ -47,7 +46,6 @@ public class ProductServiceImpl implements ProductService {
                                                 .productId(generateUniqueProductId())
                                                 .description(req.description())
                                                 .price(req.price())
-                                                .quantity(req.quantity())
                                                 .build())
                                 .toList();
 
@@ -75,8 +73,7 @@ public class ProductServiceImpl implements ProductService {
                                 product.getProductId(),
                                 product.getName(),
                                 product.getDescription(),
-                                product.getPrice(),
-                                product.getQuantity()
+                                product.getPrice()
                 );
         }
 

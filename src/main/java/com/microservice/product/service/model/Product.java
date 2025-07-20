@@ -39,7 +39,4 @@ public class Product {
 	@Column(nullable = false)
 	BigDecimal price;
 
-	@Column(nullable = false)
-	int quantity;
-
 }
