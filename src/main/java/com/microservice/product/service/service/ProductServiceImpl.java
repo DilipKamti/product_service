@@ -7,6 +7,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import com.microservice.product.service.dto.InventoryRequest;
+import com.microservice.product.service.dto.InventoryResponse;
 import com.microservice.product.service.dto.ProductRequest;
 import com.microservice.product.service.dto.ProductResponse;
 import com.microservice.product.service.model.Product;
@@ -21,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 public class ProductServiceImpl implements ProductService {
 
         private final ProductRepository productRepository;
+        private final InventoryClient inventoryClient;
 
         @Override
         public ProductResponse createProduct(ProductRequest request) {
@@ -40,23 +44,46 @@ public class ProductServiceImpl implements ProductService {
         @Async
         @Override
         public CompletableFuture<List<ProductResponse>> createProductsAsync(List<ProductRequest> requests) {
-                List<Product> products = requests.stream()
-                                .map(req -> Product.builder()
-                                                .name(req.name())
-                                                .productId(generateUniqueProductId())
-                                                .description(req.description())
-                                                .price(req.price())
-                                                .build())
-                                .toList();
+                try {
+                        List<Product> products = requests.stream()
+                                        .map(req -> Product.builder()
+                                                        .name(req.name())
+                                                        .productId(generateUniqueProductId())
+                                                        .description(req.description())
+                                                        .price(req.price())
+                                                        .build())
+                                        .toList();
 
-                List<Product> saved = productRepository.saveAll(products);
-                log.info("Async created {} products", saved.size());
+                        List<Product> saved = productRepository.saveAll(products);
+                        log.info("Async created {} products", saved.size());
 
-                List<ProductResponse> response = saved.stream()
-                                .map(this::mapToResponse)
-                                .toList();
+                        List<ProductResponse> response = saved.stream()
+                                        .map(this::mapToResponse)
+                                        .toList();
 
-                return CompletableFuture.completedFuture(response);
+                        List<InventoryRequest> inventoryRequests = response.stream()
+                                        .map(res -> new InventoryRequest(res.productId(), 1))
+                                        .toList();
+
+                        // Call inventory service with exception handling
+                        try {
+                                List<InventoryResponse> inventoryResponses = inventoryClient
+                                                .addInventoryBatch(inventoryRequests);
+                                inventoryResponses.forEach(inv -> log.info("Inventory updated for product: {}",
+                                                inv.getProductId()));
+                        } catch (Exception ex) {
+                                log.error("Failed to update inventory: {}", ex.getMessage(), ex);
+                                // Optionally: retry, save failed inventory in DB/queue, or return partial
+                                // success
+                        }
+
+                        return CompletableFuture.completedFuture(response);
+
+                } catch (Exception e) {
+                        log.error("Error in async product creation: {}", e.getMessage(), e);
+                        // Optionally rethrow a custom async error wrapper or return a failed future
+                        return CompletableFuture.failedFuture(e);
+                }
         }
 
         @Override
