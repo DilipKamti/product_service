@@ -49,8 +49,12 @@ pipeline {
                         '''
                     } else {
                         bat """
-                        FOR /F "tokens=*" %%i IN ('docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}"') DO docker stop %%i & docker rm %%i
-                        FOR /F "tokens=*" %%i IN ('docker images dilipkamti/product_service --format "{{.Repository}}:{{.Tag}}" ^| findstr /V %DOCKER_VERSION%') DO docker rmi -f %%i
+                        for /f "delims=" %%i in ('docker ps -a --filter "ancestor=dilipkamti/product_service" --format "{{.ID}}"') do (
+                            docker stop %%i
+                            docker rm %%i
+                        )
+
+                        powershell -Command "docker images dilipkamti/product_service --format '{{.Repository}}:{{.Tag}}' | Where-Object { \$_ -ne '${IMAGE_NAME}:${DOCKER_VERSION}' } | ForEach-Object { docker rmi -f \$_ }"
                         """
                     }
                 }
