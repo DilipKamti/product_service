@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,6 +39,7 @@ public class ProductController {
 	private final ProductService productService;
 
 	@PostMapping
+	@PreAuthorize("hasRole('ADMIN')")
 	@Operation(summary = "Create a product")
 	public ResponseEntity<ApiResponse<ProductResponse>> create(@Valid @RequestBody ProductRequest request) {
 		ProductResponse response = productService.createProduct(request);
@@ -45,6 +47,7 @@ public class ProductController {
 	}
 
 	@PostMapping("/batch")
+	@PreAuthorize("hasRole('ADMIN')")
 	@Operation(summary = "Create products in batch")
 	public ResponseEntity<ApiResponse<List<ProductResponse>>> createBatch(@Valid @RequestBody List<@Valid ProductRequest> requests) throws InterruptedException, ExecutionException{
 		CompletableFuture<List<ProductResponse>> future = productService.createProductsAsync(requests);
@@ -54,6 +57,7 @@ public class ProductController {
 	}
 
 	@GetMapping("/{id}")
+	@PreAuthorize("hasAnyRole('ADMIN', 'USER')")
 	@Operation(summary = "Get product by ID")
 	public ResponseEntity<ApiResponse<ProductResponse>> getById(@PathVariable Long id) {
 		ProductResponse response = productService.getProductById(id);
@@ -61,6 +65,7 @@ public class ProductController {
 	}
 
 	@GetMapping
+	//@PreAuthorize("hasAnyRole('ADMIN', 'USER')")
 	@Operation(summary = "Get all products with pagination")
 	public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAll(@PageableDefault(size = 10) Pageable pageable) {
         Page<ProductResponse> products = productService.getAllProducts(pageable);
