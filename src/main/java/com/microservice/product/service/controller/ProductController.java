@@ -47,7 +47,7 @@ public class ProductController {
 	}
 
 	@PostMapping("/batch")
-	@PreAuthorize("hasRole('ADMIN')")
+	//@PreAuthorize("hasRole('ADMIN')")
 	@Operation(summary = "Create products in batch")
 	public ResponseEntity<ApiResponse<List<ProductResponse>>> createBatch(@Valid @RequestBody List<@Valid ProductRequest> requests) throws InterruptedException, ExecutionException{
 		CompletableFuture<List<ProductResponse>> future = productService.createProductsAsync(requests);

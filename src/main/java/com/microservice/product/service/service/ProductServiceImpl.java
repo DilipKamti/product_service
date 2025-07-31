@@ -9,9 +9,9 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import com.microservice.product.service.dto.InventoryRequest;
-import com.microservice.product.service.dto.InventoryResponse;
 import com.microservice.product.service.dto.ProductRequest;
 import com.microservice.product.service.dto.ProductResponse;
+import com.microservice.product.service.kafka.KafkaProducerService;
 import com.microservice.product.service.model.Product;
 import com.microservice.product.service.repository.ProductRepository;
 import com.microservice.product.service.utility.ProductNotFoundException;
@@ -24,7 +24,9 @@ import lombok.extern.slf4j.Slf4j;
 public class ProductServiceImpl implements ProductService {
 
         private final ProductRepository productRepository;
-        private final InventoryClient inventoryClient;
+        
+        //private final InventoryClient inventoryClient; // Uncomment if using Feign/rest/webclient for inventory service
+        private final KafkaProducerService kafkaProducerService;
 
         @Override
         public ProductResponse createProduct(ProductRequest request) {
@@ -40,7 +42,10 @@ public class ProductServiceImpl implements ProductService {
 
                 return mapToResponse(savedProduct);
         }
-
+        
+        /*
+         * Uncomment this method if you want to implement async product creation using webclient or Feign client or rest template
+         * 
         @Async
         @Override
         public CompletableFuture<List<ProductResponse>> createProductsAsync(List<ProductRequest> requests) {
@@ -85,6 +90,45 @@ public class ProductServiceImpl implements ProductService {
                         return CompletableFuture.failedFuture(e);
                 }
         }
+        
+        */
+        
+        @Async
+        @Override
+        public CompletableFuture<List<ProductResponse>> createProductsAsync(List<ProductRequest> requests) {
+            try {
+                List<Product> products = requests.stream()
+                        .map(req -> Product.builder()
+                                .name(req.name())
+                                .productId(generateUniqueProductId())
+                                .description(req.description())
+                                .price(req.price())
+                                .build())
+                        .toList();
+
+                List<Product> saved = productRepository.saveAll(products);
+                log.info("✅ Saved {} products in product table", saved.size());
+
+                List<ProductResponse> response = saved.stream()
+                        .map(this::mapToResponse)
+                        .toList();
+
+                List<InventoryRequest> inventoryRequests = response.stream()
+                        .map(res -> new InventoryRequest(res.productId(), 1))
+                        .toList();
+
+                kafkaProducerService.sendToInventory(inventoryRequests);
+                log.info("📤 Sent inventory creation event to Kafka for {} products", inventoryRequests.size());
+
+                return CompletableFuture.completedFuture(response);
+
+            } catch (Exception e) {
+                log.error("❌ Error while creating products: {}", e.getMessage(), e);
+                return CompletableFuture.failedFuture(e);
+            }
+        }
+        
+        
 
         @Override
         public ProductResponse getProductById(Long id) {
@@ -113,4 +157,16 @@ public class ProductServiceImpl implements ProductService {
         private String generateUniqueProductId() {
                 return "PROD-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         }
+        
+        public void rollbackFailedInventoryRequests(List<String> failedProductCodes) {
+            if (failedProductCodes == null || failedProductCodes.isEmpty()) {
+                log.warn("⚠️ No failed product codes provided for rollback.");
+                return;
+            }
+
+            List<Product> toDelete = productRepository.findAllByProductIdIn(failedProductCodes);
+            productRepository.deleteAll(toDelete);
+            log.info("🗑️ Rolled back {} products due to inventory failure", toDelete.size());
+        }
+
 }

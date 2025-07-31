@@ -15,5 +15,6 @@ public interface ProductService {
 	ProductResponse createProduct(ProductRequest request);
     CompletableFuture<List<ProductResponse>> createProductsAsync(List<ProductRequest> requests);
     ProductResponse getProductById(Long id);
-    Page<ProductResponse> getAllProducts(Pageable pageable); 
+    Page<ProductResponse> getAllProducts(Pageable pageable);
+    void rollbackFailedInventoryRequests(List<String> data); 
 }
